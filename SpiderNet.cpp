@@ -11,6 +11,7 @@
 #include <netinet/ip_icmp.h>
 #include <sys/time.h>
 #include <math.h>
+#include <string>
 
 
  /*
@@ -37,55 +38,70 @@ unsigned short checksum(void *b, int len) {
 }
 
 bool ip_response(const char *ip){
-    //Reformular depois===========================================================
+    
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     
     if (sock < 0)
     {
         fprintf(stderr, "You are not sudo \n");
         return false;
+    }else{
+
+        // Timeout 
+        struct timeval tv;
+        tv.tv_sec = 0; 
+        tv.tv_usec = 200000;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+        // Target
+        struct sockaddr_in target;
+        target.sin_family = AF_INET;
+        inet_pton(AF_INET, ip, &target.sin_addr);
+
+
+        // ICMP package  
+        char package[64];
+        memset(package, 0, sizeof(package));
+
+        struct icmphdr *icmp = (struct icmphdr*)package;
+
+        icmp->type = ICMP_ECHO;
+        icmp->code = 0;
+        icmp->un.echo.id = htons(1234);
+        icmp->un.echo.sequence = htons(1);
+
+        //Calc checksum                         
+        icmp->checksum = checksum(package, sizeof(package)); // calc from  total package 
+
+        // Sendto <- send package send without internet
+        sendto(sock, package, sizeof(package), 0, (struct sockaddr*)&target, sizeof(target));
+
+        // Respost from timeout
+        char buffer_respost[1024];
+        struct sockaddr_in sender;
+        socklen_t len = sizeof(sender);
+
+
+        while(true){
+            int bytes = recvfrom(sock, buffer_respost, sizeof(buffer_respost), 0, (struct sockaddr*)&sender, &len );
+        
+            if(bytes <= 0){
+                close(sock);
+                return false;
+            }
+            struct iphdr *ip = (struct iphdr *)buffer_respost;
+            int header_len = ip->ihl * 4;
+
+            unsigned char type_icmp = buffer_respost[header_len];
+
+            if(type_icmp == 0){
+                close(sock);
+                return true;
+            }
+        }
     }
     
-    // Timeout 
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-
-    // Target
-    struct sockaddr_in target;
-    target.sin_family = AF_INET;
-    inet_pton(AF_INET, ip, &target.sin_addr);
-
-
-    // ICMP package  
-    char package[64];
-    memset(package, 0, sizeof(package));
-
-    struct icmphdr *icmp = (struct icmphdr*)package;
-
-    icmp->type = ICMP_ECHO;
-    icmp->code = 0;
-    icmp->un.echo.id = htons(1234);
-    icmp->un.echo.sequence = htons(1);
-
-    //Calc checksum 
-    icmp->checksum = checksum(package, sizeof(struct icmphdr));
-
-    // Sendto <- send package send without internet
-    sendto(sock, package, sizeof(struct icmphdr), 0, (struct sockaddr*)&target, sizeof(target));
-
-    // Respost from timeout
-    char buffer_respost[1024];
-    struct sockaddr_in sender;
-    socklen_t len = sizeof(sender);
-
-    int bytes = recvfrom(sock, buffer_respost, sizeof(buffer_respost), 0, (struct sockaddr*)&sender, &len );
-    close(sock);
-
-
-    return bytes < 0 ?  false : true; 
-
+        
 }
 
 bool scanPort(const char  *ip, int port){
@@ -157,22 +173,25 @@ void show_ips(const char * ip_range, int CIDR ){
     if (delimiter != NULL) {
          *(delimiter + 1) = '\0'; 
     }
-
+   // std::vector<std::string> ips;
+   std::vector<std::string> ips_list;
     printf("[*] Scanning network: %s0/%i \n", base_network, CIDR);
     printf("[*] Total hosts to scan: %d \n", const_aux);
     printf("[*] Searching... \n");
-
+    int cont_aux = 0;
     for(int i = 1; i <= const_aux; i ++){
         char ip_loop[INET_ADDRSTRLEN];
         sprintf(ip_loop, "%s%d", base_network, i);
         
         if(ip_response(ip_loop) == 1){
-            printf("- %s", ip_loop );
+          //  ips_list.push_back(ip_loop);
+            
+            printf("- %s\n", ip_loop );
 
         }
     
     }
-
+   
 
 }
 
@@ -341,6 +360,7 @@ void spider(){
 
 int main(){
     
-  
-
+    char ip [16] = "192.168.5.164";
+    show_ips(ip, 24);
+  //  std::cout << ip_response(ip);
 }

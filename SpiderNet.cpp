@@ -21,22 +21,22 @@
  *  @param len Buffer size in bytes.
  *  @return 16-bit checksum with one's complement.
  */
-unsigned short checksum(void *b, int len) {    
-    unsigned short *buf = (unsigned short *)b;
-    unsigned int sum = 0;
-    unsigned short result;
+    unsigned short checksum(void *b, int len) {    
+        unsigned short *buf = (unsigned short *)b;
+        unsigned int sum = 0;
+        unsigned short result;
 
-    for (sum = 0; len > 1; len -= 2)
-        sum += *buf++;
+        for (sum = 0; len > 1; len -= 2)
+            sum += *buf++;
 
-    if (len == 1)
-        sum += *(unsigned char *)buf;
+        if (len == 1)
+            sum += *(unsigned char *)buf;
 
-    sum = (sum >> 16) + (sum & 0xFFFF);
-    sum += (sum >> 16);
-    result = ~sum;
-    return result;
-}
+        sum = (sum >> 16) + (sum & 0xFFFF);
+        sum += (sum >> 16);
+        result = ~sum;
+        return result;
+    }
 bool ip_response(const char *ip){
     
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -73,7 +73,7 @@ bool ip_response(const char *ip){
         //Calc checksum                         
         icmp->checksum = checksum(package, sizeof(package)); // calc from  total package 
 
-        // Sendto <- send package send without internet
+        // Sendto <- send package send without making connection 
         sendto(sock, package, sizeof(package), 0, (struct sockaddr*)&target, sizeof(target));
 
         // Respost from timeout
@@ -102,7 +102,6 @@ bool ip_response(const char *ip){
 
                 std::string s1 = ip;
                 std::string s2 = d;
-
             
                 if (s1 == s2) {
                 close(sock);
@@ -162,7 +161,7 @@ void show_ips(const char * ip_range, int CIDR ){
 }
 
 
-bool scanPort(const char  *ip, int port){
+bool scan_port_aux(const char  *ip, int port){
   
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0){
@@ -185,21 +184,78 @@ bool scanPort(const char  *ip, int port){
 
     close(sock);
 }
+std::string process_info(int port){
+    struct servent *service;
+    service = getservbyport(htons(port), "tcp");
+
+    std::string str_return = service->s_name;
+
+    return str_return;
+}
+void scan_port(const char * ip, int port){
+
+    if(scan_port_aux(ip, port) == false){
+        fprintf(stderr,"[-] Connection refused\n");
+    }
+    else{
+        
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        
+        if(sock < 0){
+            fprintf(stderr,"[-]Error . . ");
+        }
+        
+        struct timeval tv;
+        tv.tv_sec = 1; tv.tv_usec = 0;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+        struct sockaddr_in host;;
+        host.sin_family = AF_INET;
+        host.sin_port = htons(port);
+        inet_pton(AF_INET, ip, &host.sin_addr);
+
+        int connection = connect(sock, (struct sockaddr*)&host, sizeof(host));
+
+        if(connection == 0){
+            char buffer [1024];
+            memset(buffer, 0, sizeof(buffer));
+            //soc, buffer for banner, limit bytes 
+            int bytes = recv(sock, buffer, 1023, 0);
+
+            if(bytes > 0 ){
+                std::string banner = buffer;
+                printf("[*] Connected \n");
+                printf("[*] %s\n", buffer);
+
+            }else{
+                printf("[*] Connected \n");
+                printf("[-] No banner service\n");
+                printf("[*] Port: %i, proocess info: %s\n ", port, process_info(port).c_str());
+
+            }
+
+        }
+        close(sock);
+    }
+}
 
 void scan_all(const char *ip, std::vector<int> ports){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
+    
+    int opne[ports.size()];
+    int closed[ports.size()];
 
     for(int i = 0; i < ports.size(); i ++ ){
-    
-        if(scanPort(ip, ports[i]) == true){
+        struct servent *service;
+        service = getservbyport(htons(i), "tcp");
+        
+        if(scan_port_aux(ip, ports[i]) == true){
+         //   ports[i] = ports[i];
 
-            printf("[*] Open port: %i in host: %s \n", ports[i], ip );
+           printf("[*] Open port: %i in host: %s \n", ports[i], ip );
+       //    printf("[-] - Process: %s\n", process_info(ports[i]));
         }
-        else{
-            
-            printf("[*] Port: %i in host: %s closed \n", ports[i], ip );
-        }
-
+       
     }
     
 }
@@ -208,8 +264,15 @@ void scan_all(const char *ip){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     
     for(int i = 0; i <= 65535; i ++){
-        if(scanPort(ip, i ) ==true ){
+        struct servent *service;
+        service = getservbyport(htons(i), "tcp");
+        
+        if(scan_port_aux(ip, i ) ==true ){
             printf("[*] Open port: %i int host: %s \n",i, ip );
+            
+            if(service != NULL){
+                printf("[-] Process: %s \n", service->s_name);
+            }            
         }            
     }
     
@@ -249,6 +312,8 @@ void tcp_flood( const char *ip, int port){
 * Ping flood DOS
 */
 void ping_flood(const char *ip, int size){
+    //Otimizar -->> 
+
 
     struct sockaddr_in target;
     target.sin_family = AF_INET;
@@ -286,10 +351,7 @@ void ping_flood(const char *ip, int size){
 }
 //Pardao th 100
 void dOS ( int th, const char *ip, int type ){
-    if( type != 1 || type != 2){
-        fprintf(stderr, "Invalid number or argument, 1. Tcp flood, 2. Ping flood");
-        return;
-    }
+   
 
     std::vector<std::thread> spiders;
    
@@ -325,6 +387,12 @@ void dOS ( int th, const char *ip, int type ){
                 spiders.emplace_back(ping_flood, ip, size);
     
             }
+            for(auto& t : spiders){
+            if(t.joinable()){
+                t.join();
+            }
+        }
+    
         }
     }   
     for(auto& t : spiders){
@@ -334,25 +402,14 @@ void dOS ( int th, const char *ip, int type ){
     }
     
 }
-std::string process_info(const char * ip, int port){
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
+void man(){
 
-    struct sockaddr_in host;
-    host.sin_family = AF_INET;
-    host.sin_port = htons(port);
-    inet_pton(AF_INET, ip, &host.sin_addr );
+    printf("- SpiderNET -- version 0.0001\n\n");
 
-    int connection = connect(sock, (struct sockaddr*)&host, sizeof(host) );
-
-    if(connection < 0){
-        fprintf(stderr, "Connection refused");
-    }
-    else{
-        
-    }
-
-
+    printf("Usage: -s: for scanner\n");
+    printf(" -s1 'ip' -p 'port' -\n");
+    printf(" -s2 'ip' -p 'list_ports' ");
 
 }
 
@@ -406,10 +463,12 @@ void spider(){
     
 }
 
-int main( int argv, char *argc){
-    
-   // char ip [16] = "192.168.5.164";
-    //show_ips(ip, 24);
-  //  std::cout << ip_response(ip);
-  spider();
+int main( ){
+    char ip [16] = "192.168.5.164";
+    int port = 80;
+    spider_name();
+    spider();
+
+    scan_port(ip, port);
+
 }

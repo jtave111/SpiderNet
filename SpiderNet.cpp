@@ -14,6 +14,13 @@
 #include <string>
 #include <mutex>
 
+struct TargetIfo{
+
+    bool status;
+    int ttl;
+    std::string ip;
+    double rtt_ms;
+};
 
  /*
  * Math calc binary - RFC 1071 IP/ICMP/UDP/TCP
@@ -21,24 +28,26 @@
  *  @param len Buffer size in bytes.
  *  @return 16-bit checksum with one's complement.
  */
-    unsigned short checksum(void *b, int len) {    
-        unsigned short *buf = (unsigned short *)b;
-        unsigned int sum = 0;
-        unsigned short result;
+unsigned short checksum(void *b, int len) {    
+    unsigned short *buf = (unsigned short *)b;
+    unsigned int sum = 0;
+    unsigned short result;
 
-        for (sum = 0; len > 1; len -= 2)
-            sum += *buf++;
+    for (sum = 0; len > 1; len -= 2)
+        sum += *buf++;
 
-        if (len == 1)
-            sum += *(unsigned char *)buf;
+    if (len == 1)
+        sum += *(unsigned char *)buf;
 
-        sum = (sum >> 16) + (sum & 0xFFFF);
-        sum += (sum >> 16);
-        result = ~sum;
-        return result;
-    }
+    sum = (sum >> 16) + (sum & 0xFFFF);
+    sum += (sum >> 16);
+    result = ~sum;
+    return result;
+}
 bool ip_response(const char *ip){
     
+    
+
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     
     if (sock < 0)
@@ -81,7 +90,7 @@ bool ip_response(const char *ip){
         struct sockaddr_in sender;
         socklen_t len = sizeof(sender);
 
-
+        
         while(true){
             int bytes = recvfrom(sock, buffer_respost, sizeof(buffer_respost), 0, (struct sockaddr*)&sender, &len );
         
@@ -92,6 +101,8 @@ bool ip_response(const char *ip){
             //Math calc for ICMP
             struct iphdr *ip_header = (struct iphdr *)buffer_respost;
             int header_len = ip_header->ihl * 4;
+
+
 
             struct icmphdr *reply = (struct icmphdr *)(buffer_respost + header_len);
             // Filter
@@ -104,16 +115,100 @@ bool ip_response(const char *ip){
                 std::string s2 = d;
             
                 if (s1 == s2) {
-                close(sock);
-                return true;
+                    close(sock);
+                 
+                    return true;
                 } 
                 else {
                     continue; 
                 }
             }
         }
+
     }
     
+}
+
+TargetIfo fingerprinting(const char * ip){
+    TargetIfo info_target = {false, 0, std::string ip};
+
+    if(ip_response(ip) == false){
+        return;
+    }
+
+    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP );
+
+
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 200000;
+    
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+    struct sockaddr_in target;
+    target.sin_family = AF_INET;
+    inet_pton(AF_INET, ip, &target.sin_addr);
+
+    char package[64];
+    memset(package, 0, sizeof(package));
+
+    struct icmphdr *icmp = (struct icmphdr*)package;
+
+    icmp->type = ICMP_ECHO;
+    icmp->code = 0;
+    icmp->un.echo.id = htons(1234);
+    icmp->un.echo.sequence = htons(1);
+
+    icmp->checksum = checksum(package, sizeof(package));
+
+    sendto(sock, package, sizeof(package), 0, (struct sockaddr*)&target, sizeof(target)); 
+
+    char buffer_respost[256];
+    struct sockaddr_in sender;
+    socklen_t len = sizeof(sender);
+
+
+    while(true){
+        int bytes = recvfrom(sock, buffer_respost, sizeof(buffer_respost), 0, (struct sockaddr*)&sender, &len );
+
+        if(bytes <= 0){
+            close(sock);
+           info_target.status = "OFILINE";
+        }
+
+        
+        struct iphdr *ip_header = (struct iphdr *)buffer_respost;
+        int header_len = ip_header->ihl * 4;
+        
+        struct icmphdr *reply = (struct icmphdr *)(buffer_respost + header_len);
+        
+        info_target.ttl = ip_header->ttl;
+
+        if(reply->type == ICMP_ECHOREPLY && reply->un.echo.id == htons(1234)){
+            
+            char d[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &sender.sin_addr, d, INET_ADDRSTRLEN);
+
+            std::string s1 = ip;
+            std::string s2 = d;
+        
+            if (s1 == s2) {
+                close(sock);
+                info_target.status = "OLINE";
+            } 
+            else {
+                continue; 
+            }
+        }
+    
+    }
+
+
+}
+
+
+std::string os_detector(const char *ip){
+   
 }
 
 std::mutex print_lock;
@@ -222,15 +317,23 @@ void scan_port(const char * ip, int port){
             //soc, buffer for banner, limit bytes 
             int bytes = recv(sock, buffer, 1023, 0);
 
+
+            if(port == 80 || port == 443 || port == 8080){
+                const char* req = "HEAD / HTTP/1.0\r\n\r\n";
+                send(sock, req, strlen(req), 0);
+
+            }
+
             if(bytes > 0 ){
                 std::string banner = buffer;
                 printf("[*] Connected \n");
                 printf("[*] %s\n", buffer);
 
             }else{
+
                 printf("[*] Connected \n");
                 printf("[-] No banner service\n");
-                printf("[*] Port: %i, proocess info: %s\n ", port, process_info(port).c_str());
+                printf("[*] Port: %i, proocess info: %s\n ", port, process_info(port).c_str());                
 
             }
 
@@ -250,8 +353,6 @@ void scan_all(const char *ip, std::vector<int> ports){
         service = getservbyport(htons(i), "tcp");
         
         if(scan_port_aux(ip, ports[i]) == true){
-         //   ports[i] = ports[i];
-
            printf("[*] Open port: %i in host: %s \n", ports[i], ip );
        //    printf("[-] - Process: %s\n", process_info(ports[i]));
         }
@@ -289,9 +390,8 @@ void payloadHost(char *buffer, int size){
     buffer[14] = '\0';
 
 }
- /*
- * TCp flood DOS
- */
+
+ //* TCp flood DOS
 void tcp_flood( const char *ip, int port){
     struct sockaddr_in host;
     host.sin_family = AF_INET;
@@ -308,9 +408,7 @@ void tcp_flood( const char *ip, int port){
     }
 }
 
-/*
-* Ping flood DOS
-*/
+//* Ping flood DOS
 void ping_flood(const char *ip, int size){
     //Otimizar -->> 
 
@@ -408,8 +506,9 @@ void man(){
     printf("- SpiderNET -- version 0.0001\n\n");
 
     printf("Usage: -s: for scanner\n");
-    printf(" -s1 'ip' -p 'port' -\n");
-    printf(" -s2 'ip' -p 'list_ports' ");
+    printf(" -SU 'ip' -p 'port' -\n");
+    printf(" -SL 'ip' -p 'list_ports' ");
+    printf(" -SA 'ip' no ports: scan all ports int host\n");
 
 }
 
@@ -464,11 +563,6 @@ void spider(){
 }
 
 int main( ){
-    char ip [16] = "192.168.5.164";
-    int port = 80;
-    spider_name();
-    spider();
-
-    scan_port(ip, port);
+   
 
 }

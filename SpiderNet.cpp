@@ -13,6 +13,7 @@
 #include <math.h>
 #include <string>
 #include <mutex>
+#include <sstream>
 
 struct TargetIfo{
 
@@ -259,6 +260,7 @@ void make_scan_rage(std::string ip){
         print_lock.unlock();
     }
 }
+
 void show_ips(const char * ip_range, int CIDR ){
     int const_aux = 0; 
     for(int i = 24; i <= 30; i ++){
@@ -349,8 +351,6 @@ void scan_port(const char * ip, int port){
     
     if(connection == 0){
         
-        std::cout <<"Visual debug " << std::endl;
-        //soc, buffer for banner, limit bytes 
         char buffer [1024];
         memset(buffer, 0, sizeof(buffer));
         int bytes = recv(sock, buffer, 1023, 0);
@@ -386,16 +386,28 @@ void scan_port(const char * ip, int port){
 void scan_all(const char *ip, std::vector<int> ports){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     
-    int opne[ports.size()];
-    int closed[ports.size()];
+    if(sock < 0){
+
+        fprintf(stderr, "[-] Error creating socket\n");
+        return;
+    }
+
 
     for(int i = 0; i < ports.size(); i ++ ){
-        struct servent *service;
-        service = getservbyport(htons(i), "tcp");
         
         if(scan_port_aux(ip, ports[i]) == true){
-           printf("[*] Open port: %i in host: %s \n", ports[i], ip );
-       //    printf("[-] - Process: %s\n", process_info(ports[i]));
+
+           std::string os = os_detector(ip);
+           printf("\n==================================\n");
+           printf("[*] Port: %i open \n", ports[i]);
+           printf("[*] Process %s\n", process_info(ports[i]).c_str());
+           printf("[*]Os: %s\n",os.c_str());
+           printf("==================================\n");
+           
+        }else{
+
+            printf("[*] Port %i, %s closed\n", ports[i], process_info(ports[i]).c_str());
+
         }
        
     }
@@ -475,7 +487,7 @@ void ping_flood(const char *ip, int size){
     if (sock < 0)
     {   
         delete[] package;
-        fprintf(stderr, "[*] You are not sudo \n");
+        fprintf(stderr, "[*] You are not a sudo \n");
         return;
     }
 
@@ -547,17 +559,13 @@ void man(){
     //Scanner ports -- 
     printf("Usage: -s: for scanner\n");
     printf(" -sO 'ip' -p 'port' -\n");
-    printf(" -sL 'ip' -p 'list_ports' ");
+    printf(" -sL 'ip' -p 'list_ports' ex: --> ./SpiderNet -sL 10.10.10.10 -p 21,22,4444,8080,19,33,8000,443 \n");
     printf(" -sA 'ip' no ports: scan all ports int host\n\n");
 
     //Dos
     printf(" -For Dos usage -D\n");
     printf(" -D1- Dos tcp flood D2- Dos ping flood\n");
     printf(" -D1 'ip -p 'port\n");
-
-
-
-
 
 }
 
@@ -572,44 +580,7 @@ void spider_name(){
     "      |_|                                         \n"
     );
 }
-void spider(){
-    
-    printf(
-    "           ;               ,           \n"
-    "         ,;                 '.         \n"
-    "        ;:                   :;        \n"
-    "       ::                     ::       \n"
-    "       ::                     ::       \n"
-    "       ':                     :        \n"
-    "        :.                    :        \n"
-    "     ;' ::                   ::  '     \n"
-    "    .'  ';                   ;'  '.    \n"
-    "   ::    :;                 ;:    ::   \n"
-    "   ;      :;.             ,;:     ::   \n"
-    "   :;      :;:           ,;\"      ::   \n"
-    "   ::.      ':;  ..,.;  ;:'     ,.;:   \n"
-    "    \"'\"...   '::,::::: ;:   .;.;\"\"'    \n"
-    "        '\"\"\"....;:::::;,;.;\"\"\"         \n"
-    "    .:::.....'\"':::::::'\",...;::::;.   \n"
-    "   ;:' '\"\"'\"\";.,;:::::;.'\"\"\"\"\"\"  ':;   \n"
-    "  ::'         ;::;:::;::..         :;  \n"
-    " ::         ,;:::::::::::;:..       :: \n"
-    " ;'     ,;;:;::::::::::::::;\";..    ':.\n"
-    "::     ;:\"  ::::::\"\"\"'::::::  \":     ::\n"
-    " :.    ::   ::::::;  :::::::   :     ; \n"
-    "  ;    ::   :::::::  :::::::   :    ;  \n"
-    "   '   ::   ::::::....:::::'  ,:   '   \n"
-    "    '  ::    :::::::::::::\"   ::       \n"
-    "       ::     ':::::::::\"'    ::       \n"
-    "       ':       \"\"\"\"\"\"\"'      ::       \n"
-    "        ::                   ;:        \n"
-    "        ':;                 ;:\"        \n"
-    "          ';              ,;'          \n"
-    "            \"'           '\"            \n"
-    "              ' \n"
-    );
-    
-}
+
 
 int main( int argc,  char * argv[] ){
     /*
@@ -618,8 +589,6 @@ int main( int argc,  char * argv[] ){
     int port = 21;
 
     std::cout << "Debug ip resonse: status host " << ip_response(ip) << std::endl;
-
-
 
     std::cout << "Debug scan_port --> " << std::endl;
 
@@ -640,18 +609,47 @@ int main( int argc,  char * argv[] ){
     }
     
     //-- para criar
-    //printf("Usage: -S: for scanner\n");
-    //printf(" -SU 'ip' -p 'port' -\n");
-   // printf(" -SL 'ip' -p 'list_ports' ");
-   // printf(" -SA 'ip' no ports: scan all ports int host\n\n");
+    
+   // printf(" -sA 'ip' no ports: scan all ports int host\n\n");
 
     if(std::string(argv[1]) == "-sO" && std::string(argv[3]) =="-p"){
         
         const char *ip = argv[2];
-
         int prot = std::stoi(argv[4]);
 
         scan_port(ip, prot);
+
+
+    }else if(std::string(argv[1]) == "-sL" && std::string(argv[3]) =="-p"){
+
+        const char *ip = argv[2];
+
+        std::string portsRaw = argv[4];
+
+        std::vector<int> portList;
+        std::stringstream ss(portsRaw);
+        std::string segment;
+        
+        while(std::getline(ss, segment, ',')){
+
+            try
+            {   
+                int port = std::stoi(segment);
+                portList.push_back(port);
+
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << segment << " its a not valid port" <<  '\n';
+            }
+            
+        }
+
+        std::cout << "Ports colecteds " << std::endl;
+
+        scan_all(ip, portList);
+
+ 
     }
       
 

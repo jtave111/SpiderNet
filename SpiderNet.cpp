@@ -128,16 +128,32 @@ bool ip_response(const char *ip){
     }
     
 }
+void aux_ip_response(const char * ip){
 
-TargetIfo fingerprinting(const char * ip){
-    TargetIfo info_target = {false, 0, std::string ip};
+    if(ip_response(ip) == true ){
 
-    if(ip_response(ip) == false){
-        return;
+        printf("Host valid\n");
     }
+    else{
+
+        fprintf(stderr, "Invalid host\n");
+    }
+
+}
+TargetIfo fingerprinting(const char * ip){
+    std::string ip_str = ip;
+    
+    TargetIfo info_target;
+    info_target.ttl = 0;
+    info_target.ip = ip;
+    info_target.status = "OFILINE";
 
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP );
 
+    if(sock < 0){
+
+        return info_target;
+    }
 
     struct timeval tv;
     tv.tv_sec = 0;
@@ -173,7 +189,8 @@ TargetIfo fingerprinting(const char * ip){
 
         if(bytes <= 0){
             close(sock);
-           info_target.status = "OFILINE";
+            info_target.status = "OFILINE";
+            return info_target;
         }
 
         
@@ -182,7 +199,7 @@ TargetIfo fingerprinting(const char * ip){
         
         struct icmphdr *reply = (struct icmphdr *)(buffer_respost + header_len);
         
-        info_target.ttl = ip_header->ttl;
+        int capture_ttl = ip_header->ttl;
 
         if(reply->type == ICMP_ECHOREPLY && reply->un.echo.id == htons(1234)){
             
@@ -195,7 +212,9 @@ TargetIfo fingerprinting(const char * ip){
             if (s1 == s2) {
                 close(sock);
                 info_target.status = "OLINE";
-            } 
+                info_target.ttl = capture_ttl;
+                return info_target;
+            }   
             else {
                 continue; 
             }
@@ -203,12 +222,31 @@ TargetIfo fingerprinting(const char * ip){
     
     }
 
+    
+    info_target.status = "OFILINE";
+
+    close(sock);
+    return info_target;
 
 }
 
-
 std::string os_detector(const char *ip){
    
+    if(ip_response(ip) == false ) return "refused_connection";
+   
+    TargetIfo target_info = fingerprinting(ip);
+
+    if(target_info.ttl == 0) return "No os detected";
+
+
+    else if(target_info.ttl <= 64) return "Linux";
+
+    else if(target_info.ttl <= 126) return "Windows";
+
+    else if(target_info.ttl <= 255) return "Router";
+
+    else return "unknown ";
+
 }
 
 std::mutex print_lock;
@@ -255,7 +293,6 @@ void show_ips(const char * ip_range, int CIDR ){
     }
 }
 
-
 bool scan_port_aux(const char  *ip, int port){
   
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -279,6 +316,7 @@ bool scan_port_aux(const char  *ip, int port){
 
     close(sock);
 }
+
 std::string process_info(int port){
     struct servent *service;
     service = getservbyport(htons(port), "tcp");
@@ -287,59 +325,62 @@ std::string process_info(int port){
 
     return str_return;
 }
+
+//Scan one port 
 void scan_port(const char * ip, int port){
 
-    if(scan_port_aux(ip, port) == false){
-        fprintf(stderr,"[-] Connection refused\n");
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    
+    if(sock < 0){
+        fprintf(stderr,"[-]Error creating socket\n ");
+        return;
     }
-    else{
+            
+    struct timeval tv;
+    tv.tv_sec = 1; tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+    struct sockaddr_in host;;
+    host.sin_family = AF_INET;
+    host.sin_port = htons(port);
+    inet_pton(AF_INET, ip, &host.sin_addr);
+
+    int connection = connect(sock, (struct sockaddr*)&host, sizeof(host));
+    
+    if(connection == 0){
         
+        std::cout <<"Visual debug " << std::endl;
+        //soc, buffer for banner, limit bytes 
+        char buffer [1024];
+        memset(buffer, 0, sizeof(buffer));
+        int bytes = recv(sock, buffer, 1023, 0);
+
+        if(port == 80 || port == 443 || port == 8080){
+        
+            const char* req = "HEAD / HTTP/1.0\r\n\r\n";
+            send(sock, req, strlen(req), 0);
+
+        }
+
+        std::string os = os_detector(ip);
         int sock = socket(AF_INET, SOCK_STREAM, 0);
         
-        if(sock < 0){
-            fprintf(stderr,"[-]Error . . ");
-        }
-        
-        struct timeval tv;
-        tv.tv_sec = 1; tv.tv_usec = 0;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+        if(bytes > 0 ){
+         
+            std::string banner = buffer;
+            printf("[*] Connected \n");
+            printf("[*] %s", buffer);
+            printf("[*] Os: %s\n", os.c_str());
 
-        struct sockaddr_in host;;
-        host.sin_family = AF_INET;
-        host.sin_port = htons(port);
-        inet_pton(AF_INET, ip, &host.sin_addr);
+        }else{
 
-        int connection = connect(sock, (struct sockaddr*)&host, sizeof(host));
-
-        if(connection == 0){
-            char buffer [1024];
-            memset(buffer, 0, sizeof(buffer));
-            //soc, buffer for banner, limit bytes 
-            int bytes = recv(sock, buffer, 1023, 0);
-
-
-            if(port == 80 || port == 443 || port == 8080){
-                const char* req = "HEAD / HTTP/1.0\r\n\r\n";
-                send(sock, req, strlen(req), 0);
-
-            }
-
-            if(bytes > 0 ){
-                std::string banner = buffer;
-                printf("[*] Connected \n");
-                printf("[*] %s\n", buffer);
-
-            }else{
-
-                printf("[*] Connected \n");
-                printf("[-] No banner service\n");
-                printf("[*] Port: %i, proocess info: %s\n ", port, process_info(port).c_str());                
-
-            }
+            printf("[*] Connected \n");
+            printf("[-] No banner service\n");
+            printf("[*] Port: %i, proocess info: %s\n ", port, process_info(port).c_str());                
 
         }
-        close(sock);
     }
+    close(sock);  
 }
 
 void scan_all(const char *ip, std::vector<int> ports){
@@ -378,7 +419,8 @@ void scan_all(const char *ip){
     }
     
 }
-void payloadHost(char *buffer, int size){
+//DnsResolver
+void payloadHost(char *buffer){
     struct hostent *hostInfo;
     hostInfo = gethostbyname(buffer);
     char ipChar[INET_ADDRSTRLEN];
@@ -411,8 +453,6 @@ void tcp_flood( const char *ip, int port){
 //* Ping flood DOS
 void ping_flood(const char *ip, int size){
     //Otimizar -->> 
-
-
     struct sockaddr_in target;
     target.sin_family = AF_INET;
     inet_pton(AF_INET, ip, &target.sin_addr);
@@ -503,12 +543,21 @@ void dOS ( int th, const char *ip, int type ){
 
 void man(){
 
-    printf("- SpiderNET -- version 0.0001\n\n");
-
+    printf("\n- SpiderNET -- version 0.0001\n");
+    //Scanner ports -- 
     printf("Usage: -s: for scanner\n");
-    printf(" -SU 'ip' -p 'port' -\n");
-    printf(" -SL 'ip' -p 'list_ports' ");
-    printf(" -SA 'ip' no ports: scan all ports int host\n");
+    printf(" -sO 'ip' -p 'port' -\n");
+    printf(" -sL 'ip' -p 'list_ports' ");
+    printf(" -sA 'ip' no ports: scan all ports int host\n\n");
+
+    //Dos
+    printf(" -For Dos usage -D\n");
+    printf(" -D1- Dos tcp flood D2- Dos ping flood\n");
+    printf(" -D1 'ip -p 'port\n");
+
+
+
+
 
 }
 
@@ -562,7 +611,50 @@ void spider(){
     
 }
 
-int main( ){
-   
+int main( int argc,  char * argv[] ){
+    /*
+    char  ip [16] = "";
+
+    int port = 21;
+
+    std::cout << "Debug ip resonse: status host " << ip_response(ip) << std::endl;
+
+
+
+    std::cout << "Debug scan_port --> " << std::endl;
+
+    std::cout << "===============" << std::endl;
+    scan_port(ip, port);
+
+    */
+
+    if(argc <=1){
+
+        printf("Use './SpiderNet -H '  for more details\n ");
+    
+        return 0;
+    }
+
+    if(argc > 1 && std::string(argv[1])== "-H"){
+        man();
+    }
+    
+    //-- para criar
+    //printf("Usage: -S: for scanner\n");
+    //printf(" -SU 'ip' -p 'port' -\n");
+   // printf(" -SL 'ip' -p 'list_ports' ");
+   // printf(" -SA 'ip' no ports: scan all ports int host\n\n");
+
+    if(std::string(argv[1]) == "-sO" && std::string(argv[3]) =="-p"){
+        
+        const char *ip = argv[2];
+
+        int prot = std::stoi(argv[4]);
+
+        scan_port(ip, prot);
+    }
+      
+
 
 }
+ 

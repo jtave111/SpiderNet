@@ -60,3 +60,9 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+*.obj
+*.o
+SpiderNet
+*.Executables
+*.elf
+

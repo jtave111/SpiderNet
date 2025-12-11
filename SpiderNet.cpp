@@ -15,6 +15,16 @@
 #include <mutex>
 #include <sstream>
 
+
+
+/*
+* Create udp functions 
+*/
+
+
+
+
+
 struct TargetIfo{
 
     bool status;
@@ -47,8 +57,6 @@ unsigned short checksum(void *b, int len) {
 }
 bool ip_response(const char *ip){
     
-    
-
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     
     if (sock < 0)
@@ -432,17 +440,22 @@ void scan_all(const char *ip){
     
 }
 //DnsResolver
-void payloadHost(char *buffer){
+std::string dns_resolver(char *buffer){
+
+
+
     struct hostent *hostInfo;
     hostInfo = gethostbyname(buffer);
-    char ipChar[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, hostInfo->h_addr,ipChar, INET_ADDRSTRLEN );
-    
-    std::string ip(ipChar);
-    // making payload
-    strncpy(buffer, ip.c_str(), 15);
-    buffer[14] = '\0';
+    char ip[INET_ADDRSTRLEN];
 
+    inet_ntop(AF_INET, hostInfo->h_addr,ip, INET_ADDRSTRLEN );
+    std::string ip_str(ip);
+
+    if(ip_response(ip) == false){
+        return "Connection refused";
+    }
+
+    return ip_str;
 }
 
  //* TCp flood DOS

@@ -14,7 +14,8 @@
 #include <string>
 #include <mutex>
 #include <sstream>
-
+#include <unistd.h>
+#include<sys/types.h>
 
 
 /*
@@ -23,7 +24,11 @@
 
 
 
+bool is_root(){
 
+    return(getuid() == 0);
+
+}
 
 struct TargetIfo{
 
@@ -61,7 +66,6 @@ bool ip_response(const char *ip){
     
     if (sock < 0)
     {
-        fprintf(stderr, "You are not sudo \n");
         return false;
     }else{
 
@@ -424,16 +428,20 @@ void scan_all(const char *ip, std::vector<int> ports){
 
 void scan_all(const char *ip){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    
+    printf("[*] Scanning . . . \n");
     for(int i = 0; i <= 65535; i ++){
         struct servent *service;
         service = getservbyport(htons(i), "tcp");
         
+        
+
         if(scan_port_aux(ip, i ) ==true ){
-            printf("[*] Open port: %i int host: %s \n",i, ip );
             
             if(service != NULL){
-                printf("[-] Process: %s \n", service->s_name);
+                printf("[*] Open port: %i, %s in host: %s \n",i, ip, service->s_name);
+                
+            }else{
+                printf("[*] Open port: %i,[service undefine] int host: %s \n",i, ip );
             }            
         }            
     }
@@ -568,14 +576,17 @@ void dOS ( int th, const char *ip, int type ){
 
 void man(){
 
-    printf("\n- SpiderNET -- version 0.0001\n");
-    //Scanner ports -- 
+    printf("\nSpiderNET -- version 0.0001\n\n");
+    //Scanners -- 
+    printf("Scanners \n");
     printf("Usage: -s: for scanner\n");
     printf(" -sO 'ip' -p 'port' -\n");
-    printf(" -sL 'ip' -p 'list_ports' ex: --> ./SpiderNet -sL 10.10.10.10 -p 21,22,4444,8080,19,33,8000,443 \n");
-    printf(" -sA 'ip' no ports: scan all ports int host\n\n");
-
-    //Dos
+    printf(" -sL 'ip' -p 'list_ports' ex: --> ./SpiderNet -sL 192.1.1.1 -p 21,22,4444,8080,19,33,8000,443 \n");
+    printf(" -sA 'ip' no ports: scan all ports int host\n");
+    printf(" -sR 'ip/CIDR' --> ./SpiderNet -sL 192.1.1.1/24\n\n");
+    
+    //Dos -- 
+    printf("DOS\n");
     printf(" -For Dos usage -D\n");
     printf(" -D1- Dos tcp flood D2- Dos ping flood\n");
     printf(" -D1 'ip -p 'port\n");
@@ -610,22 +621,30 @@ int main( int argc,  char * argv[] ){
 
     */
 
-    if(argc <=1){
+    if(!is_root()){
+        fprintf(stderr, "Fatal ERROR. sudo requirement \n");
+        
+        return 0;
 
-        printf("Use './SpiderNet -H '  for more details\n ");
+    }else if (argc <=1){
+        fprintf(stderr, "Fatal error \n");
+        fprintf(stderr, "Use './SpiderNet -H '  for more details\n ");
     
         return 0;
     }
 
-    if(argc > 1 && std::string(argv[1])== "-H"){
+    if(argc > 1 && (std::string(argv[1])== "-H"  || std::string(argv[1]) == "-h")){
         man();
     }
     
-    //-- para criar
-    
-   // printf(" -sA 'ip' no ports: scan all ports int host\n\n");
+    if(std::string(argv[1]) == "-sA"){
 
-    if(std::string(argv[1]) == "-sO" && std::string(argv[3]) =="-p"){
+        const char *ip = argv[2];
+
+        scan_all(ip);
+
+    }
+    else if(std::string(argv[1]) == "-sO" && std::string(argv[3]) =="-p"){
         
         const char *ip = argv[2];
         int prot = std::stoi(argv[4]);
@@ -663,9 +682,35 @@ int main( int argc,  char * argv[] ){
         scan_all(ip, portList);
 
  
+    }else if(std::string(argv[1]) == "-sR"){
+
+
+        std::string longfax_range = (argv[2]);
+        std::stringstream ss(longfax_range);
+        std::string ip_base;
+        int CIDR = 0;
+        
+        if(std::getline(ss, ip_base, '/')){
+
+            ss >> CIDR;
+        }
+
+
+        if(CIDR <= 0 && CIDR > 32){
+            
+            return 0;
+
+        }
+
+
+        const char * ip = ip_base.c_str();
+
+        show_ips(ip, CIDR);
+
+
     }
       
 
-
+   
 }
  

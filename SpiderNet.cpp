@@ -39,7 +39,7 @@ struct TargetIfo{
 };
 
  /*
- * Math calc binary - RFC 1071 IP/ICMP/UDP/TCP
+ *  Math calc binary - RFC 1071 IP/ICMP/UDP/TCP
  *  @param b Pointer to the data buffer.
  *  @param len Buffer size in bytes.
  *  @return 16-bit checksum with one's complement.
@@ -708,9 +708,49 @@ int main( int argc,  char * argv[] ){
         show_ips(ip, CIDR);
 
 
+
     }
       
 
-   
-}
+    /*
+
+    create 
+    Dos -- 
+    printf("DOS\n");
+    printf(" -For Dos usage -D\n");
+    printf(" -D1- Dos tcp flood D2- Dos ping flood\n");
+    printf(" -D1 'ip -p 'port\n");
+    void dOS ( int th, const char *ip, int type ){
+    */
+    if(std::string(argv[1]) == "-d"){
+
+        int type = 0;
+        const char * ip = argv[2];
+        int th = 0;
+        
+        printf("Numbber of threads: -standard: 100 \n");
+        scanf("%i", &th);
+
+        printf("Use ctrl + c for stop\n");
+            
+        if(std::string(argv[3]) == "-T"){        
+        
+            type =1;
+    
+            dOS(th, ip, type);
+
+        }
+        else if(std::string(argv[3]) == "-P"){
+
+            type = 2;
+
+            dOS(th, ip, type);
+
+
+        }
+        
+    }
+
+    
+} 
  

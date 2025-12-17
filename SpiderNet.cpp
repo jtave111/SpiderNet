@@ -268,43 +268,56 @@ void make_scan_rage(std::string ip){
 
     if(ip_response(ip.c_str()) == true ){
         print_lock.lock();
-        printf("[-] host oline: %s \n", ip.c_str());
+        printf("[*] host oline: %s \n", ip.c_str());
         print_lock.unlock();
     }
 }
 
-void show_ips(const char * ip_range, int CIDR ){
-    int const_aux = 0; 
-    for(int i = 24; i <= 30; i ++){
-        if(i == CIDR){
-            const_aux = pow(2, (32 - CIDR)) -2 ;
-            break;      
-        }
-    }
-    char base_network [20];
-    strcpy(base_network, ip_range); 
-    //cut rage     
-    char *delimiter = strrchr(base_network, '.');
-    if (delimiter != NULL) {
-        *(delimiter + 1) = '\0'; 
-    }
+uint32_t ipToInt(const std::string& ip){
+    std::stringstream ss(ip);
 
-    printf("[*] Scanning network: %s0/%i \n", base_network, CIDR);
-    printf("[*] Total hosts to scan: %d \n", const_aux);
-    printf("[*] Searching... \n");
+    uint32_t a,b,c,d;
+
+    char p;
+
+    ss >> a >> p >> b >> p >> c >> p >> d;
+
+
+    return ( a << 24) | (b<< 16) | (c << 8) | d;
+
+
+}
+
+std::string intToIpStr(uint32_t ip ){
+    // 0xFF = 255 // 
+
+    return std::to_string((ip >> 24) & 0xFF) + "." +
+    std::to_string((ip >> 16) & 0xFF) + "." +
+    std::to_string((ip >> 8) & 0xFF) + "." +
+    std::to_string(ip & 0xFF);
+
+}
+
+void show_ips(const std::string& ip_str, int CIDR ){
     std::vector<std::thread> spiders;
+    uint32_t ip = ipToInt(ip_str);
+    uint32_t mask = 0xFFFFFFFF << (32 - CIDR);
 
-    for(int i = 1; i <= const_aux; i ++){
-        char ip_loop[INET_ADDRSTRLEN];
-        sprintf(ip_loop, "%s%d", base_network, i);
         
-        spiders.emplace_back(make_scan_rage, std::string(ip_loop));
-    
+    uint32_t network = ip &  mask; 
+    uint32_t broadcast = ip | ~mask;
+
+
+    for(uint32_t i = network + 1;  i < broadcast; i ++ ){
+
+        spiders.emplace_back(make_scan_rage, intToIpStr(i));
     }
 
-    for(auto& t : spiders){
+    for(auto& t: spiders){
         if(t.joinable()) t.join();
     }
+   
+    
 }
 
 bool scan_port_aux(const char  *ip, int port){
@@ -485,7 +498,7 @@ void tcp_flood( const char *ip, int port){
 
 //* Ping flood DOS
 void ping_flood(const char *ip, int size){
-    //Otimizar -->> 
+ 
     struct sockaddr_in target;
     target.sin_family = AF_INET;
     inet_pton(AF_INET, ip, &target.sin_addr);
@@ -585,11 +598,12 @@ void man(){
     printf(" -sA 'ip' no ports: scan all ports int host\n");
     printf(" -sR 'ip/CIDR' --> ./SpiderNet -sL 192.1.1.1/24\n\n");
     
+ 
     //Dos -- 
     printf("DOS\n");
-    printf(" -For Dos usage -D\n");
-    printf(" -D1- Dos tcp flood D2- Dos ping flood\n");
-    printf(" -D1 'ip -p 'port\n");
+    printf(" -For Dos usage -d\n");
+    printf(" -d  'ip' -T  --Dos tcp flood\n");
+    printf(" -d'ip -P --Dos ping flood\n");
 
 }
 
@@ -703,25 +717,15 @@ int main( int argc,  char * argv[] ){
         }
 
 
-        const char * ip = ip_base.c_str();
+        //const char * ip = ip_base.c_str();
 
-        show_ips(ip, CIDR);
+        show_ips(ip_base, CIDR);
 
 
 
     }
       
-
-    /*
-
-    create 
-    Dos -- 
-    printf("DOS\n");
-    printf(" -For Dos usage -D\n");
-    printf(" -D1- Dos tcp flood D2- Dos ping flood\n");
-    printf(" -D1 'ip -p 'port\n");
-    void dOS ( int th, const char *ip, int type ){
-    */
+  
     if(std::string(argv[1]) == "-d"){
 
         int type = 0;

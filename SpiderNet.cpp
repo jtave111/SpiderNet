@@ -60,6 +60,79 @@ unsigned short checksum(void *b, int len) {
     result = ~sum;
     return result;
 }
+
+// new  ping function(ip_response) 
+
+bool ping(const char *ip){
+    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+
+    if(sock < 0) return false;
+
+    timeval tv {};
+    tv.tv_sec = 0;
+    tv.tv_usec = 200000;
+
+    setsockopt(
+        sock,
+        SOL_SOCKET,
+        SO_RCVTIMEO,
+        &tv,
+        sizeof(tv)
+    );
+
+    sockaddr_in target {};
+    target.sin_family = AF_INET;
+    
+    if(inet_pton(AF_INET, ip, &target.sin_addr) != 1 ){
+        close(sock);
+        return false;
+    }
+
+    char packet[sizeof(icmphdr)]{};
+
+    icmphdr *icmp = (icmphdr*)packet;
+
+    icmp-> type = ICMP_ECHO;
+    icmp->code = 0;
+    icmp->un.echo.id = htons(getpid() & 0xFFFF);
+    icmp->un.echo.sequence = htons(1);
+    icmp->checksum = checksum(packet, sizeof(packet));
+
+    if(sendto(sock, packet, sizeof(packet), 0, (sockaddr*)&target, sizeof(target)) < 0){
+       
+        close(sock);
+        return false;
+    }
+
+    char buffer[1024];
+    sockaddr_in sender{};
+    socklen_t len = sizeof(sender);
+    
+    int bytes = recvfrom(sock,buffer, sizeof(buffer), 0, (sockaddr*)&sender, &len);
+    if(bytes <=0){
+        close(sock);
+        return false;
+    }
+
+    iphdr *ip_hdr = (iphdr *)buffer;
+    int ip_len = ip_hdr->ihl * 4;
+
+    if (bytes < ip_len + (int)sizeof(icmphdr)) {
+        close(sock);
+        return false;
+    }
+
+    icmphdr *reply = (icmphdr*)(buffer + ip_len);
+    
+    bool ok = (reply->type == ICMP_ECHOREPLY &&
+               reply->un.echo.id == icmp->un.echo.id &&
+               sender.sin_addr.s_addr == target.sin_addr.s_addr);
+
+    close(sock);
+    return ok;
+
+}   
+
 bool ip_response(const char *ip){
     
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -307,6 +380,8 @@ void show_ips(const std::string& ip_str, int CIDR ){
     uint32_t network = ip &  mask; 
     uint32_t broadcast = ip | ~mask;
 
+    printf("[*] Network: %s ", intToIpStr(network));
+    printf("[*] Broadcast: %s ", intToIpStr(broadcast));
 
     for(uint32_t i = network + 1;  i < broadcast; i ++ ){
 
@@ -503,7 +578,9 @@ void ping_flood(const char *ip, int size){
     target.sin_family = AF_INET;
     inet_pton(AF_INET, ip, &target.sin_addr);
     
-    //Big spider aloc 
+    
+
+    
     int big_spider = sizeof(struct icmphdr) + size;   
     char *package = new char[big_spider];
     memset(package, 'X', big_spider);
@@ -533,7 +610,7 @@ void ping_flood(const char *ip, int size){
     }
  
 }
-//Pardao th 100
+
 void dOS ( int th, const char *ip, int type ){
    
 
@@ -589,6 +666,15 @@ void dOS ( int th, const char *ip, int type ){
 
 void man(){
 
+    printf(
+    " ____        _     _           _   _ _____ _____ \n"
+    "/ ___| _ __ (_) __| | ___ _ __| \\ | | ____|_   _|\n"
+    "\\___ \\| '_ \\| |/ _` |/ _ \\ '__|  \\| |  _|   | |  \n"
+    " ___) | |_) | | (_| |  __/ |  | |\\  | |___  | |  \n"
+    "|____/| .__/|_|\\__,_|\\___|_|  |_| \\_|_____| |_|  \n"
+    "      |_|                                         \n"
+    );
+
     printf("\nSpiderNET -- version 0.0001\n\n");
     //Scanners -- 
     printf("Scanners \n");
@@ -621,19 +707,11 @@ void spider_name(){
 
 
 int main( int argc,  char * argv[] ){
-    /*
-    char  ip [16] = "";
 
-    int port = 21;
 
-    std::cout << "Debug ip resonse: status host " << ip_response(ip) << std::endl;
+    char ip [ 16] = "192.168.5.227";
 
-    std::cout << "Debug scan_port --> " << std::endl;
-
-    std::cout << "===============" << std::endl;
-    scan_port(ip, port);
-
-    */
+    std::cout << "Resultado teste do ping " << ping(ip) << std::endl; 
 
     if(!is_root()){
         fprintf(stderr, "Fatal ERROR. sudo requirement \n");
@@ -710,18 +788,13 @@ int main( int argc,  char * argv[] ){
         }
 
 
+
         if(CIDR <= 0 && CIDR > 32){
             
             return 0;
-
         }
 
-
-        //const char * ip = ip_base.c_str();
-
         show_ips(ip_base, CIDR);
-
-
 
     }
       

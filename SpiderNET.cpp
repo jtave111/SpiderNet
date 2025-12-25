@@ -16,6 +16,7 @@
 #include <sstream>
 #include <unistd.h>
 #include<sys/types.h>
+#include <sys/select.h>
 
 
 /*
@@ -63,7 +64,7 @@ unsigned short checksum(void *b, int len) {
 
 // new  ping function(ip_response) 
 
-bool ping(const char *ip){
+bool ip_response(const char *ip){
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 
     if(sock < 0) return false;
@@ -133,87 +134,6 @@ bool ping(const char *ip){
 
 }   
 
-bool ip_response(const char *ip){
-    
-    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-    
-    if (sock < 0)
-    {
-        return false;
-    }else{
-
-        // Timeout 
-        struct timeval tv;
-        tv.tv_sec = 0; 
-        tv.tv_usec = 200000;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-
-        // Target
-        struct sockaddr_in target;
-        target.sin_family = AF_INET;
-        inet_pton(AF_INET, ip, &target.sin_addr);
-
-
-        // ICMP package  
-        char package[64];
-        memset(package, 0, sizeof(package));
-
-        struct icmphdr *icmp = (struct icmphdr*)package;
-
-        icmp->type = ICMP_ECHO;
-        icmp->code = 0;
-        icmp->un.echo.id = htons(1234);
-        icmp->un.echo.sequence = htons(1);
-
-        //Calc checksum                         
-        icmp->checksum = checksum(package, sizeof(package)); // calc from  total package 
-
-        // Sendto <- send package send without making connection 
-        sendto(sock, package, sizeof(package), 0, (struct sockaddr*)&target, sizeof(target));
-
-        // Respost from timeout
-        char buffer_respost[1024];
-        struct sockaddr_in sender;
-        socklen_t len = sizeof(sender);
-
-        
-        while(true){
-            int bytes = recvfrom(sock, buffer_respost, sizeof(buffer_respost), 0, (struct sockaddr*)&sender, &len );
-        
-            if(bytes <= 0){
-                close(sock);
-                return false;   
-            }
-            //Math calc for ICMP
-            struct iphdr *ip_header = (struct iphdr *)buffer_respost;
-            int header_len = ip_header->ihl * 4;
-
-
-
-            struct icmphdr *reply = (struct icmphdr *)(buffer_respost + header_len);
-            // Filter
-            if(reply->type == ICMP_ECHOREPLY && reply->un.echo.id == htons(1234)){
-                
-                char d[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &sender.sin_addr, d, INET_ADDRSTRLEN);
-
-                std::string s1 = ip;
-                std::string s2 = d;
-            
-                if (s1 == s2) {
-                    close(sock);
-                 
-                    return true;
-                } 
-                else {
-                    continue; 
-                }
-            }
-        }
-
-    }
-    
-}
 void aux_ip_response(const char * ip){
 
     if(ip_response(ip) == true ){
@@ -335,6 +255,33 @@ std::string os_detector(const char *ip){
 
 }
 
+
+//terminar isso
+
+void chatMenssage(const char *ip, int port){
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+    if(sock < 0){
+        printf("[-] Fatal errorr \n");
+        return;
+    }
+
+    struct sockaddr_in target;
+
+    target.sin_family = AF_INET;
+
+    target.sin_port = htons(port);
+
+    inet_pton(AF_INET, ip, &target.sin_addr);
+
+
+    int connection = connection =(sock, (sockaddr*)&target, sizeof(target));
+    
+
+
+
+}
+
 std::mutex print_lock;
 void make_scan_rage(std::string ip){
     
@@ -379,9 +326,11 @@ void show_ips(const std::string& ip_str, int CIDR ){
         
     uint32_t network = ip &  mask; 
     uint32_t broadcast = ip | ~mask;
+   
+    std::cout << "[*] Network: "   << intToIpStr(network)   << std::endl;
+    std::cout << "[*] Broadcast: " << intToIpStr(broadcast) << std::endl;
 
-    printf("[*] Network: %s ", intToIpStr(network));
-    printf("[*] Broadcast: %s ", intToIpStr(broadcast));
+
 
     for(uint32_t i = network + 1;  i < broadcast; i ++ ){
 
@@ -708,10 +657,9 @@ void spider_name(){
 
 int main( int argc,  char * argv[] ){
 
+    const char ip [16] = "192.168.5.73";  
+    chatMenssage(ip, 2190);
 
-    char ip [ 16] = "192.168.5.227";
-
-    std::cout << "Resultado teste do ping " << ping(ip) << std::endl; 
 
     if(!is_root()){
         fprintf(stderr, "Fatal ERROR. sudo requirement \n");
@@ -789,7 +737,7 @@ int main( int argc,  char * argv[] ){
 
 
 
-        if(CIDR <= 0 && CIDR > 32){
+        if(CIDR <= 0 || CIDR > 32){
             
             return 0;
         }

@@ -42,6 +42,7 @@ std::string Scanner::intToIpStr(uint32_t ip) {
 }
 
 void Scanner::show_ips(const std::string& ip_str, int CIDR) {
+    
     std::vector<std::thread> spiders;
     uint32_t ip = ipToInt(ip_str);
     uint32_t mask = 0xFFFFFFFF << (32 - CIDR);

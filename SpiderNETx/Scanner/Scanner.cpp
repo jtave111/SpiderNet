@@ -1,1 +1,0 @@
-/// Refatorar as chamdadas das threads 

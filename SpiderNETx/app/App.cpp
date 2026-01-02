@@ -18,8 +18,14 @@ void App::spider_name() {
 
 void App::man() {
     spider_name();
-    printf("\nSpiderNET -- version 0.0001\n\n");
+    printf("\nSpiderNET -- version 0.001\n\n");
     
+    //Server
+    printf("Servers");
+    printf("Usage -sRV: for server\n");
+    printf("  -sRV 'ip' -p 'port' -TCP");
+
+    //Scanners 
     printf("Scanners \n");
     printf("Usage: -s: for scanner\n");
     printf(" -sO 'ip' -p 'port'\n");
@@ -27,6 +33,7 @@ void App::man() {
     printf(" -sA 'ip': scan all ports in host\n");
     printf(" -sR 'ip/CIDR' --> ./SpiderNet -sR 192.1.1.1/24\n\n");
     
+    //Dos
     printf("DOS\n");
     printf(" -For Dos usage -d\n");
     printf(" -d 'ip' -T  --Dos tcp flood\n");
@@ -57,6 +64,8 @@ void App::run(int argc, char* argv[]) {
     }
 
    
+
+    // Scanner ---- 
     if (arg1 == "-sA" && argc >= 3) {
         scanner.scan_all(argv[2]);
     }
@@ -93,7 +102,10 @@ void App::run(int argc, char* argv[]) {
         }
     }
    
-    else if (arg1 == "-d" && argc >= 4) {
+
+
+    //DOs --- 
+    if (arg1 == "-d" && argc >= 4) {
         if (!is_root()) {
             fprintf(stderr, "Fatal ERROR. sudo requirement\n");
             return;
@@ -107,4 +119,26 @@ void App::run(int argc, char* argv[]) {
         dos_tool.dOS(th, argv[2], type);
     }
 
+
+
+
+    //Server 
+    //printf("  -sRV 'ip' -p 'port' -TCP");
+
+    if(arg1 == "-sRV"){
+        std::string flag_port = argv[2];
+        std::string flag_proto = argv[4];
+        
+        if(flag_port == "-p" && flag_proto == "-TCP" ){
+
+            int port = std::stoi(argv[3]);
+
+            printf("[*] Echo TCP server start \n");
+
+            echo_server.startEchoTcpServer(port);
+
+
+        }
+
+    }
 }

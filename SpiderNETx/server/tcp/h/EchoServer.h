@@ -10,7 +10,7 @@ private:
 
 public:
 
-    void startEchoTcpServer(char *ip, int port);
+    void startEchoTcpServer( int port);
 
 
 

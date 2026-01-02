@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <cstring>
 
-void EchoServer::startEchoTcpServer(char * ip, int port){
+void EchoServer::startEchoTcpServer( int port){
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -24,12 +24,12 @@ void EchoServer::startEchoTcpServer(char * ip, int port){
 
     server.sin_family = AF_INET;
     server.sin_port = htons(port);
-    inet_pton(AF_INET, ip, &server.sin_addr);
+    server.sin_addr.s_addr = INADDR_ANY;
 
     
     if(bind(sock, (struct sockaddr *)&server, sizeof(server)) < 0){
 
-        fprintf(stderr, "[x] Blind error");
+        fprintf(stderr, "[x] Blind error \n");
         close(sock);
         return;
 
@@ -51,7 +51,10 @@ void EchoServer::startEchoTcpServer(char * ip, int port){
     {        
 
         int socket_agent = accept(sock, (struct sockaddr *)&client, &client_len);
+        
+        char client_ip[INET_ADDRSTRLEN];
 
+        inet_ntop(AF_INET, &client.sin_addr, client_ip, INET_ADDRSTRLEN);
 
         if(socket_agent > 0){
 
@@ -69,6 +72,8 @@ void EchoServer::startEchoTcpServer(char * ip, int port){
 
                     send(socket_agent, buffer, bytes_client, 0);
 
+                    printf("[%s]: %s", client_ip, buffer);
+                    fflush(stdout);
 
                 }else if(bytes_client == 0){
                     

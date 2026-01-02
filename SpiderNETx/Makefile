@@ -10,7 +10,8 @@ SRCS = app/main.cpp \
        fingerprint/Fingerprint.cpp \
        ping/Ping.cpp \
        ping/IpResponse.cpp \
-       scanner/Scanner.cpp
+       scanner/Scanner.cpp \
+       server/tcp/EchoServer.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 

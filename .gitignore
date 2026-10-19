@@ -66,3 +66,4 @@ SpiderNet
 *.Executables
 *.elf
 
+.idea/
